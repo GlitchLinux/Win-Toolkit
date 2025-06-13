@@ -221,13 +221,16 @@ function New-BootStructure {
     
     # Configure bootmgr entry
     $bootmgrGuid = "{9dea862c-5cdd-4e70-acc1-f32b344d4795}"
+    # Replace the current BCD configuration with this more robust version:
     & bcdedit /store $bcdPath /create $bootmgrGuid /d "Windows Boot Manager" | Out-Null
     & bcdedit /store $bcdPath /set $bootmgrGuid device boot | Out-Null
     & bcdedit /store $bcdPath /set $bootmgrGuid path \bootmgr | Out-Null
-    & bcdedit /store $bcdPath /set $bootmgrGuid inherit "{bootloadersettings}" | Out-Null
+    & bcdedit /store $bcdPath /set $bootmgrGuid inherit {bootloadersettings} | Out-Null
     & bcdedit /store $bcdPath /set $bootmgrGuid locale en-US | Out-Null
-    & bcdedit /store $bcdPath /set $bootmgrGuid displaybootmenu yes | Out-Null
-    & bcdedit /store $bcdPath /set $bootmgrGuid timeout 30 | Out-Null
+    & bcdedit /store $bcdPath /set $bootmgrGuid integrityservices Enable | Out-Null 
+    & bcdedit /store $bcdPath /set $bootmgrGuid recoverysequence $osLoaderGuid | Out-Null
+    & bcdedit /store $bcdPath /set $bootmgrGuid recoveryenabled Yes | Out-Null
+    & bcdedit /store $bcdPath /set $bootmgrGuid isolatedcontext Yes | Out-Null
     
     # Create ramdisk options
     $ramdiskGuid = "{7619dcc8-fafe-11d9-b411-000476eba25f}"
@@ -248,13 +251,14 @@ function New-BootStructure {
         $osLoaderGuid = ($osLoaderOutput | Select-String -Pattern "\{[^}]+\}").Matches[0].Value
         
         if ($osLoaderGuid) {
-            & bcdedit /store $bcdPath /set $osLoaderGuid device "ramdisk=[$wimRelativePath],$ramdiskGuid" | Out-Null
-            & bcdedit /store $bcdPath /set $osLoaderGuid path \windows\system32\boot\winload.efi | Out-Null
-            & bcdedit /store $bcdPath /set $osLoaderGuid osdevice "ramdisk=[$wimRelativePath],$ramdiskGuid" | Out-Null
-            & bcdedit /store $bcdPath /set $osLoaderGuid systemroot \windows | Out-Null
-            & bcdedit /store $bcdPath /set $osLoaderGuid detecthal yes | Out-Null
-            & bcdedit /store $bcdPath /set $osLoaderGuid winpe yes | Out-Null
-            & bcdedit /store $bcdPath /set $osLoaderGuid locale en-US | Out-Null
+        # For each WIM boot entry, add these critical parameters:
+        & bcdedit /store $bcdPath /set $osLoaderGuid device "ramdisk=[$wimRelativePath],$ramdiskGuid" | Out-Null
+        & bcdedit /store $bcdPath /set $osLoaderGuid osdevice "ramdisk=[$wimRelativePath],$ramdiskGuid" | Out-Null
+        & bcdedit /store $bcdPath /set $osLoaderGuid systemroot \Windows | Out-Null
+        & bcdedit /store $bcdPath /set $osLoaderGuid winpe yes | Out-Null
+        & bcdedit /store $bcdPath /set $osLoaderGuid detecthal yes | Out-Null
+        & bcdedit /store $bcdPath /set $osLoaderGuid nx OptIn | Out-Null
+        & bcdedit /store $bcdPath /set $osLoaderGuid pae ForceEnable | Out-Null
             
             $displayOrder += $osLoaderGuid
         }
